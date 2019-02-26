@@ -57,6 +57,12 @@ static unsigned char refname_disposition[256] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 4, 4
 };
 
+int char_allowed_in_refname(int ch)
+{
+	return 0 <= ch && ch < ARRAY_SIZE(refname_disposition) &&
+		refname_disposition[ch] == 0;
+}
+
 /*
  * Try to read one refname component from the front of refname.
  * Return the length of the component found, or -1 if the component is
