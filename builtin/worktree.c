@@ -262,6 +262,36 @@ done:
 	free_worktrees(worktrees);
 }
 
+static void sanitize_worktree_name(struct strbuf *name)
+{
+	struct strbuf sb = STRBUF_INIT;
+	int i;
+
+	for (i = 0; i < name->len; i++) {
+		int ch = name->buf[i];
+
+		if (char_allowed_in_refname(ch))
+			strbuf_addch(&sb, ch);
+		else if (sb.len > 0 && sb.buf[sb.len - 1] != '-')
+			strbuf_addch(&sb, '-');
+	}
+	if (sb.len > 0 && sb.buf[sb.len - 1] == '-')
+		strbuf_setlen(&sb, sb.len - 1);
+	/*
+	 * a worktree name of only special chars would be reduced to
+	 * an empty string
+	 */
+	if (sb.len == 0)
+		strbuf_addstr(&sb, "worktree");
+
+	if (check_refname_format(sb.buf, REFNAME_ALLOW_ONELEVEL))
+		BUG("worktree name '%s' (from '%s') is not a valid refname",
+		    sb.buf, name->buf);
+
+	strbuf_swap(&sb, name);
+	strbuf_release(&sb);
+}
+
 static int add_worktree(const char *path, const char *refname,
 			const struct add_opts *opts)
 {
@@ -275,6 +305,7 @@ static int add_worktree(const char *path, const char *refname,
 	struct strbuf symref = STRBUF_INIT;
 	struct commit *commit = NULL;
 	int is_branch = 0;
+	struct strbuf sb_name = STRBUF_INIT;
 
 	validate_worktree_add(path, opts);
 
@@ -290,7 +321,10 @@ static int add_worktree(const char *path, const char *refname,
 		die(_("invalid reference: %s"), refname);
 
 	name = worktree_basename(path, &len);
-	git_path_buf(&sb_repo, "worktrees/%.*s", (int)(path + len - name), name);
+	strbuf_add(&sb_name, name, path + len - name);
+	sanitize_worktree_name(&sb_name);
+	name = sb_name.buf;
+	git_path_buf(&sb_repo, "worktrees/%s", name);
 	len = sb_repo.len;
 	if (safe_create_leading_directories_const(sb_repo.buf))
 		die_errno(_("could not create leading directories of '%s'"),
@@ -416,6 +450,7 @@ done:
 	strbuf_release(&symref);
 	strbuf_release(&sb_repo);
 	strbuf_release(&sb_git);
+	strbuf_release(&sb_name);
 	return ret;
 }
 
